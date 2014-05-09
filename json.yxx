@@ -1,0 +1,94 @@
+%parse-param    {yyFlexLexer &lexer}
+
+%{
+#include "json.h"
+#include <map>
+#include <string>
+#include <vector>
+#include <FlexLexer.h>
+
+void yyerror(yyFlexLexer &, const char *);
+
+extern Json::ObjectValue *obj;
+
+#undef yylex
+#define yylex   lexer.yylex
+
+%}
+
+%union {
+    char *s;
+    //char s[128];
+    double d;
+    long   i;
+    bool   b;
+//    Json::BoolValue *b;
+//    Json::IntValue  *i;
+//    Json::FloatValue    *f;
+//    Json::StringValue   *s;
+    Json::ArrayValue    *a;
+    Json::ObjectValue   *o;
+    Json::Value         *v;
+    std::vector<Json::Value *> *vl;
+    std::map<std::string, Json::Value *> *m;
+}
+
+%token <b>B <i>I <d>F <s>S
+
+
+%type <v>   value
+%type <vl>  value_list array_value_list
+%type <a>   array
+%type <m>   item_list object_item_list
+%type <o>   object      json
+
+%%
+json: object    {obj = $1;}
+        ;
+
+value:  B {$$ = new Json::BoolValue($1);}
+        | I {$$ = new Json::IntValue($1);}
+        | F {$$ = new Json::FloatValue($1);}
+        | S {$$ = new Json::StringValue($1); delete $1;}
+        | array {$$ = $1;}
+        | object {$$ = $1;}
+        ;
+value_list :  value   {$$=new std::vector<Json::Value *>; $$->push_back($1);printf("NEW VEC\n");}
+    | value_list ',' value  { $1->push_back($3);}
+    ;
+
+array_value_list: {$$ = new std::vector<Json::Value *>;printf("NEW VEC\n");}
+        | value_list {$$ = $1;}
+        | value_list ',' {$$ = $1;}
+        ;
+array: '[' array_value_list ']' {$$ = new Json::ArrayValue((*$2)); delete $2;printf("DEL VEC\n");}
+
+item_list: S ':' value {$$ = new std::map<std::string, Json::Value *>; (*$$)[$1] = $3; delete $1; printf("NEW MAP\n");}
+        | item_list ',' S ':' value { (*$1)[$3] = $5; delete $3;}
+        ;
+object_item_list: {$$ = new std::map<std::string, Json::Value *>;printf("NEW MAP\n");}
+        | item_list {$$ = $1;}
+        | item_list ',' {$$ = $1;}
+        ;
+object: '{' object_item_list '}' {$$ = new Json::ObjectValue((*$2)); delete $2;printf("DEL MAP\n");}
+    ;
+
+%%
+
+Json::ObjectValue *obj=nullptr;
+void yyerror(yyFlexLexer &lex, const char *x){}
+int yyFlexLexer::yywrap(){return 1;}
+
+int main()
+{
+    yyFlexLexer lexer;
+    yyparse(lexer);
+    if(obj){
+        obj->Encode([](const void *str, unsigned n)->int{
+            return printf("%s", str);
+        });
+        printf("\n===========================\n");
+    }
+
+    return 0;
+}
