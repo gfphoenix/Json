@@ -69,10 +69,10 @@ namespace Json {
             bool Encode(const std::function<int (const void *, unsigned)>& writer)const ;
         public:
             StringValue(const std::string &v):Value(Type::jType_STRING), _v(v){}
-            //            StringValue(std::string &&v);
+            StringValue(std::string &&v):Value(Type::jType_STRING), _v(std::move(v)){}
             std::string getValue()const {return _v;}
             void setValue(const std::string &v){ _v = v;}
-            //           void setValue(std::string && v){_v = std::move(v);}
+            void setValue(std::string && v){_v = std::move(v);}
 
     };
     class ArrayValue : public Value {
@@ -81,7 +81,8 @@ namespace Json {
         public:
             //          ArrayValue(Value * v, ...);
             ArrayValue(const std::vector<Value*> &v):Value(Type::jType_ARRAY),_v(v){}
-            //         ArrayValue(std::vector<Value*> &&v);
+            ArrayValue(std::vector<Value*> &&v)
+                :Value(Type::jType_ARRAY), _v(std::move(v)){}
             Value *operator[](int idx) {
                 if(idx<0 || idx>=_v.size())
                     return nullptr;
@@ -97,6 +98,8 @@ namespace Json {
         public:
             ObjectValue():Value(Type::jType_OBJECT){}
             ObjectValue(const std::map<std::string, Value *> &map):Value(Type::jType_OBJECT),m(map){}
+            ObjectValue(std::map<std::string, Value *> &&map)
+                :Value(Type::jType_OBJECT),m(std::move(map)){}
             Value * operator[](const std::string &key){return m[key];}
 
             bool hasKey(const std::string &k){

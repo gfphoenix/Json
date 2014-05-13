@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <FlexLexer.h>
+#include <utility>
 
 void yyerror(yyFlexLexer &, const char *);
 
@@ -61,7 +62,7 @@ array_value_list: {$$ = new std::vector<Json::Value *>;printf("NEW VEC\n");}
         | value_list {$$ = $1;}
         | value_list ',' {$$ = $1;}
         ;
-array: '[' array_value_list ']' {$$ = new Json::ArrayValue((*$2)); delete $2;printf("DEL VEC\n");}
+array: '[' array_value_list ']' {$$ = new Json::ArrayValue(std::move(*$2)); delete $2;printf("DEL VEC\n");}
 
 item_list: S ':' value {$$ = new std::map<std::string, Json::Value *>; (*$$)[$1] = $3; delete $1; printf("NEW MAP\n");}
         | item_list ',' S ':' value { (*$1)[$3] = $5; delete $3;}
@@ -70,7 +71,7 @@ object_item_list: {$$ = new std::map<std::string, Json::Value *>;printf("NEW MAP
         | item_list {$$ = $1;}
         | item_list ',' {$$ = $1;}
         ;
-object: '{' object_item_list '}' {$$ = new Json::ObjectValue((*$2)); delete $2;printf("DEL MAP\n");}
+object: '{' object_item_list '}' {$$ = new Json::ObjectValue(std::move(*$2)); delete $2;printf("DEL MAP\n");}
     ;
 
 %%

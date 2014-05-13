@@ -32,7 +32,9 @@ bool FloatValue::Encode(const std::function<int (const void *, unsigned)>& write
 }
 bool StringValue::Encode(const std::function<int (const void *, unsigned)>& writer)const
 {
-    return writer(_v.c_str(), (unsigned)_v.size()) == (int)_v.size();
+    char buf[(unsigned)_v.size()+4];
+    int n = sprintf(buf, "\"%s\"", _v.c_str());
+    return n==_v.size()+2 && writer(buf, n) == n;
 }
 bool ArrayValue::Encode(const std::function<int (const void *, unsigned)>& writer)const 
 {
@@ -71,8 +73,9 @@ bool ObjectValue::Encode(const std::function<int (const void *, unsigned)>& writ
     for(auto x = m.cbegin(); x != m.cend(); x++){
         auto &k = x->first;
         auto &v = x->second;
-        char buf[(unsigned)k.size() + 16];
-        int n = snprintf(buf, (unsigned)k.size()+16, "\"%s\" : ", k.c_str());
+
+        char buf[(unsigned)k.size() + 8];
+        int n = snprintf(buf, (unsigned)k.size()+8, "\"%s\" : ", k.c_str());
         e = writer(buf, n);
         if(e!=n || e != (int)k.size()+5)
             return false;
@@ -97,14 +100,14 @@ out:
 //fix me
 StringValue::StringValue(std::string &&v)
     :Value(Type::jType_STRING), _v(std::move(v)){}
-ArrayValue::ArrayValue(const std::vector<Value*> &v)
-    :Value(Type::jType_ARRAY)
+    ArrayValue::ArrayValue(const std::vector<Value*> &v)
+:Value(Type::jType_ARRAY)
 {
     _v = v;
 }
 //move constructor
-ArrayValue::ArrayValue(std::vector<Value*> &&v)
-    :Value(Type::jType_ARRAY)
+    ArrayValue::ArrayValue(std::vector<Value*> &&v)
+:Value(Type::jType_ARRAY)
 {
     _v = v;
 }
