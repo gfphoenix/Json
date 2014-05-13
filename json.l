@@ -10,12 +10,18 @@
 
 %%
 
-[:,;}{\[\]]  {
-   // printf("sym <%c>\n", yytext[0]);
-    return yytext[0];}
-[0-9]+      {
-   // printf("number <%s>\n", yytext);
-    yylval.i = strtol(yytext,nullptr,10); return I;}
+[:,;}{\[\]]  { return yytext[0];}
+[0-9]+      {//leading '0' has not yet handled, now
+                yylval.i = strtol(yytext,nullptr,10);
+                return I;
+                }
+
+[0-9]*\.[0-9]*  {
+                    if(YYLeng() == 1){
+                    }
+                    yylval.d = strtold(yytext, nullptr);
+                    return F;
+                }
 \"(\\.|[^"]*)*\"    {
     //printf("string: <\"%s\">\n", yytext);
                     //strcpy(yylval.s, yytext);
