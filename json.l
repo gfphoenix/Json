@@ -23,8 +23,6 @@
                     return F;
                 }
 \"(\\.|[^"]*)*\"    {
-    //printf("string: <\"%s\">\n", yytext);
-                    //strcpy(yylval.s, yytext);
                     yytext++;
                     int n = strlen(yytext);
                     yylval.s = new char[n];
