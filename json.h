@@ -88,22 +88,62 @@ namespace Json {
                     return nullptr;
                 return _v[idx];
             }
+            typedef std::vector<Value*>::iterator iterator;
+            typedef std::vector<Value*>::const_iterator const_iterator;
+            typedef std::vector<Value*>::reverse_iterator reverse_iterator;
+            typedef std::vector<Value*>::const_reverse_iterator const_reverse_iterator;
+            iterator begin(){return _v.begin();}
+            iterator end(){return _v.end();}
+            const_iterator begin()const {return _v.begin();}
+            const_iterator end()const {return _v.end();}
+            reverse_iterator rbegin(){return _v.rbegin();}
+            reverse_iterator rend(){return _v.rend();}
+            const_reverse_iterator rbegin()const{return _v.rbegin();}
+            const_reverse_iterator rend()const {return _v.rend();}
+
+            const_iterator cbegin()const{return _v.cbegin();}
+            const_iterator cend()const{return _v.cend();}
+            const_reverse_iterator crbegin()const{return _v.crbegin();}
+            const_reverse_iterator crend()const{return _v.crend();}
+
+            typedef std::vector<Value*>::size_type size_type;
+            size_type size()const {return _v.size();}
             //add iterator
         protected:
             bool Encode(const std::function<int (const void *, unsigned)>& writer)const ;
     };
     class ObjectValue : public Value {
         private:
-            std::map<std::string, Value*> m;
+            std::map<std::string, Value*> _m;
         public:
             ObjectValue():Value(Type::jType_OBJECT){}
-            ObjectValue(const std::map<std::string, Value *> &map):Value(Type::jType_OBJECT),m(map){}
+            ObjectValue(const std::map<std::string, Value *> &map):Value(Type::jType_OBJECT),_m(map){}
             ObjectValue(std::map<std::string, Value *> &&map)
-                :Value(Type::jType_OBJECT),m(std::move(map)){}
-            Value * operator[](const std::string &key){return m[key];}
+                :Value(Type::jType_OBJECT),_m(std::move(map)){}
+            Value * operator[](const std::string &key){return _m[key];}
 
+            typedef std::map<std::string, Value*>::iterator iterator;
+            typedef std::map<std::string, Value*>::const_iterator const_iterator;
+            typedef std::map<std::string, Value*>::reverse_iterator reverse_iterator;
+            typedef std::map<std::string, Value*>::const_reverse_iterator const_reverse_iterator;
+            iterator begin(){return _m.begin();}
+            iterator end(){return _m.end();}
+            const_iterator begin()const {return _m.begin();}
+            const_iterator end()const {return _m.end();}
+            reverse_iterator rbegin(){return _m.rbegin();}
+            reverse_iterator rend(){return _m.rend();}
+            const_reverse_iterator rbegin()const{return _m.rbegin();}
+            const_reverse_iterator rend()const {return _m.rend();}
+
+            const_iterator cbegin()const{return _m.cbegin();}
+            const_iterator cend()const{return _m.cend();}
+            const_reverse_iterator crbegin()const{return _m.crbegin();}
+            const_reverse_iterator crend()const{return _m.crend();}
+
+            typedef std::map<std::string, Value*>::size_type size_type;
+            size_type size()const {return _m.size();}
             bool hasKey(const std::string &k){
-                return m[k] != nullptr;
+                return _m[k] != nullptr;
             }
 
             bool Encode(const std::function<int (const void *, unsigned)>& writer)const ;

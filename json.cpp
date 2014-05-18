@@ -67,10 +67,10 @@ bool ObjectValue::Encode(const std::function<int (const void *, unsigned)>& writ
     e = writer("{\n", 2);
     if(e != 2)
         return false;
-    if(m.size() == 0)
+    if(_m.size() == 0)
         goto out;
 
-    for(auto x = m.cbegin(); x != m.cend(); x++){
+    for(auto x = _m.cbegin(); x != _m.cend(); x++){
         auto &k = x->first;
         auto &v = x->second;
 
@@ -95,30 +95,4 @@ out:
 
 // ==============================================================================================
 // ############## end of encode
-
-#if 0
-//fix me
-StringValue::StringValue(std::string &&v)
-    :Value(Type::jType_STRING), _v(std::move(v)){}
-    ArrayValue::ArrayValue(const std::vector<Value*> &v)
-:Value(Type::jType_ARRAY)
-{
-    _v = v;
-}
-//move constructor
-    ArrayValue::ArrayValue(std::vector<Value*> &&v)
-:Value(Type::jType_ARRAY)
-{
-    _v = v;
-}
-
-#endif
-
-
-
-
-
-
-
-
 

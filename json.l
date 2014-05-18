@@ -5,11 +5,8 @@
 #include <string>
 #include <vector>
 #include <utility>
-
 %}
-
 %%
-
 [:,;}{\[\]]  { return yytext[0];}
 [0-9]+      {//leading '0' has not yet handled, now
                 yylval.i = strtol(yytext,nullptr,10);
@@ -34,10 +31,7 @@
 
 [ \r\t\n]+      {}
 .               {printf("ERROR<%s>\n", yytext);}
-
 %%
-
-
 #if 0
 int yyFlexLexer::yywrap(){return 1;}
 int main()
