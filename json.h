@@ -15,6 +15,7 @@ namespace Json {
         jType_INT,
         jType_FLOAT,
         jType_STRING,
+	jType_NULL,
     };
     class Value {
         public:
@@ -30,6 +31,13 @@ namespace Json {
             bool isStringType()const {return type == Type::jType_STRING;}
             bool isArrayType()const {return type == Type::jType_ARRAY;}
             bool isObjectType()const {return type == Type::jType_OBJECT;}
+    };
+    class NullValue : public Value {
+	    public:
+		    NullValue():Value(Type::jType_NULL){}
+		    bool Encode(const std::function<int(const void *, unsigned)> &writer)const{
+			    return writer("null", 4)==4;
+		    }
     };
     class BoolValue : public Value {
         private:
@@ -68,6 +76,7 @@ namespace Json {
         protected:
             bool Encode(const std::function<int (const void *, unsigned)>& writer)const ;
         public:
+	    StringValue(const char *s, size_t n):Value(Type::jType_STRING), _v(s,s+n){}
             StringValue(const std::string &v):Value(Type::jType_STRING), _v(v){}
             StringValue(std::string &&v):Value(Type::jType_STRING), _v(std::move(v)){}
             std::string getValue()const {return _v;}
@@ -80,11 +89,12 @@ namespace Json {
             std::vector<Value*> _v;
         public:
             //          ArrayValue(Value * v, ...);
+	    ArrayValue():Value(Type::jType_ARRAY){}
             ArrayValue(const std::vector<Value*> &v):Value(Type::jType_ARRAY),_v(v){}
             ArrayValue(std::vector<Value*> &&v)
                 :Value(Type::jType_ARRAY), _v(std::move(v)){}
             Value *operator[](int idx) {
-                if(idx<0 || idx>=_v.size())
+                if(idx<0 || idx>=(int)_v.size())
                     return nullptr;
                 return _v[idx];
             }
@@ -109,6 +119,7 @@ namespace Json {
             typedef std::vector<Value*>::size_type size_type;
             size_type size()const {return _v.size();}
             //add iterator
+	    void add(Value *);
         protected:
             bool Encode(const std::function<int (const void *, unsigned)>& writer)const ;
     };
@@ -145,6 +156,8 @@ namespace Json {
             bool hasKey(const std::string &k){
                 return _m[k] != nullptr;
             }
+	    void add(const std::string &key, Value *val);
+	    void add(std::string &&key, Value *val);
 
             bool Encode(const std::function<int (const void *, unsigned)>& writer)const ;
     };
