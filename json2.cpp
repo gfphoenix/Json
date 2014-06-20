@@ -1,82 +1,11 @@
 #include <functional>
-#include "json.h"
+#include "json.hpp"
 #include <string.h>
+#include <stdlib.h>
 #include <string>
+#include <cmath>
 
 using namespace Json;
-
-#define BUFSZ   4096
-class Reader {
-    public:
-        bool isEnd()const;
-};
-//tokens
-// { } [ ] , : "xxx"  true false null  123  12.3 unknown
-// '{' '}' '[' ']' ',' ':' 's' 'b' 'b' 'n' 'i' 'd' '?'
-// 分别对应以上各符号的返回值
-// 需要保存的值：'i', 'd', 's'
-enum class TokenType {
-    OL = 1,
-    OR,
-    AL,
-    AR,
-    COMMA,
-    COLON,
-    s,
-    b,
-    n,
-    i,
-    f,
-    UNKNOWN,
-    eof,
-};
-
-class Parser
-{
-    private:
-        typedef unsigned int size_t;
-        const char *err;
-        char buf[BUFSZ];
-        int cap; // real active in [0, cap)
-        int pos;
-        std::function<int (void *, unsigned)> reader;
-        union {
-            long long   i;
-            double      d;
-            bool        b;
-            struct {
-                //最长4KB的字符串
-                char s[4096];
-                size_t len;
-            };
-        }data;
-    public:
-        Parser(const std::function<int(void *, unsigned)> &r)
-            : pos(0)
-              , cap(0)
-              , err(nullptr)  
-              , reader(r){}
-        ObjectValue *parseObject();
-        ArrayValue *parseArray();
-        ObjectValue *parseObjectInternal();
-    protected:
-        int getToken();
-        int  eatSpace();
-        void parseItem();
-        Value* parseValue();
-    private:
-        bool literal(const char *s, int len);
-        int parseTrue();
-        int parseFalse();
-        int parseNull();
-        int parseString();
-        int parseNumber();
-        int parseInt();
-        int parseFloat();
-        Value *getValue(int token);
-        int load();
-        int checkAndLoad();
-};
 
 // >0 读取到有效数据
 // =0 文件已经读取完毕，没有可用数据
@@ -87,7 +16,7 @@ int  Parser::load()
     int left = BUFSZ;
     char *p = buf;
     pos = cap = 0;
-    while(left >0 && (n = reader(p, left)>0)){
+    while(left >0 && ((n = reader(p, left))>0)){
         cap += n;
         p  += n;
         left -= n;
@@ -95,14 +24,6 @@ int  Parser::load()
     if(cap > 0)
         return cap;
     return n;
-}
-// >0 ok
-// =0 eof
-// <0 io error
-int Parser::checkAndLoad(){
-    if(pos < cap-1)
-        return 1;
-    return load();
 }
 inline bool isBlackSpace(char c)
 {
@@ -157,20 +78,18 @@ ObjectValue *Parser::parseObject()
     int token;
     while((token=getToken())!='}'){
         //expect key : value
-        //        token = getToken();
         if(token != 's')
             goto err_out;
         if(getToken()!=':')
             goto err_out;
         // how to make a key is better ?
         std::string str(this->data.s, this->data.len);
-        Value *v;
         token = getToken();
-        v = getValue(token);
+        auto v = getValue(token);
         if(v == nullptr)
             goto err_out;
 
-        obj->add(str, v);
+        obj->add(str, *v);
         //test if the next token is ','
         token = getToken();
         if(token != ',')
@@ -263,35 +182,155 @@ int Parser::parseString()
     return checkAndLoad() > 0 ? 's' : -1;
 }
 
-int Parser::parseInt()
+bool Parser::parseExp(double &ret)
 {
-    if(cap - pos>=22){
-        data.i = strtoll(&buf[pos], nullptr, 10);
-        return 'i';
+    bool neg = false;
+    int e;
+    pos++;
+    e = checkAndLoad();
+    if(e<=0)
+        return e;
+    if(buf[pos]=='-'){
+        neg = true;
+        pos++;
+        e = checkAndLoad();
+        if(e<=0)
+            return e;
     }
-    char tmp[22];
-    memcpy(tmp, &buf[pos], cap - pos);
-    return -1;
+    long v=0;
+    if(buf[pos]<'0' || buf[pos]>'9')
+        return false;
+    while(buf[pos]>='0' && buf[pos]<='9'){
+        v = v*10 + buf[pos]-'0';
+        pos++;
+        e = checkAndLoad();
+        if(e<=0)
+            return e;
+    }
+    if(neg)
+        v = -v;
+    ret = pow(10, (double)v);
+    return true;
 }
 
-int Parser::parseFloat()
+int  Parser::parseInt()
 {
-    return -1;
+    bool neg = false;
+    int e;
+    if(buf[pos]=='-'){
+        neg = true;
+        pos++;
+        e = checkAndLoad();
+        if(e<=0)
+            return e;
+    }
+    data.i = 0;
+    if(buf[pos]<'0' || buf[pos]>'9')
+        return -1;
+    if(buf[pos]=='0'){
+        pos++;
+        e = checkAndLoad();
+        if(e<=0)
+            return e;
+        return 'i';
+    }
+    do{
+        data.i = data.i * 10 + buf[pos]-'0';
+        pos++;
+        e = checkAndLoad();
+        if(e<=0)
+            return e;
+    }while(buf[pos]>='0' && buf[pos]<='9');
+
+    if(neg)
+        data.i = -data.i;
+    return 'i';
+}
+
+//整数部分在data.i
+//当前符号是'.'
+int  Parser::parseFloat()
+{
+    double v=0.0;
+    double x=0.1;
+    int e;
+    pos++;
+    e = checkAndLoad();
+    if(e<=0)
+        return e;
+    if(buf[pos]<'0' || buf[pos]>'9')
+        return -1;
+    while(buf[pos]>='0' && buf[pos]<='9'){
+        v = v + x*(buf[pos]-'0');
+        x /= 10;
+        pos++;
+        e = checkAndLoad();
+        if(e<=0)
+            return e;
+    }
+    if(data.i<0){
+        data.d = -(v-data.i);
+    }else{
+        data.d = data.i + v;
+    }
+    if(buf[pos]!='e' || buf[pos]!='E')
+        return 'f';
+    double tmp;
+    auto b = parseExp(tmp);
+    if(!b)
+        return -1;
+    data.d = data.d * tmp;
+    return 'f';
 }
 
 int Parser::parseNumber()
 {
-    return -1;
+    int e ;
+    e = parseInt();
+    if(e<=0)
+        return e;
+    e = checkAndLoad();
+    if(e<=0)
+        return e;
+    switch(buf[pos]){
+        case '.':
+            e = parseFloat();
+            break;
+        case 'e':
+        case 'E':
+            {
+                double tmp;
+                bool b = parseExp(tmp);
+                if(b){
+                    data.d = data.i * tmp;
+                    e = 'f';
+                }else{
+                    e = -1;
+                }
+                break;
+            }
+        default:
+            return 'i';
+    }
+    return e;
 }
-
 
 int Parser::getToken()
 {
+again:
     int e = checkAndLoad();
     if(e<=0)
         return e;
     char c = buf[pos];
     switch(buf[pos]){
+        //blank space
+        case ' ':
+        case '\t':
+        case '\n':
+        case '\r':
+        case '\v':
+            pos++;
+            goto again;
         case '{':
         case '}':
         case '[':
@@ -302,27 +341,23 @@ int Parser::getToken()
             if(checkAndLoad()<0)
                 return -1;
             return c;
-        case 't':
-            return parseTrue();
-        case 'f':
-            return parseFalse();
-        case 'n':
-            return parseNull();
-        case '"':
-            return parseString();
+        case 't': return parseTrue();
+        case 'f': return parseFalse();
+        case 'n': return parseNull();
+        case '"': return parseString();
         default:
-            return parseNumber();
+                  return parseNumber();
     }
 }
-ObjectValue *Parser::parseObjectInternal()
+ObjectValue *Parser::parse()
 {
     int e = getToken();
     if(e<=0)
         return nullptr;
-    if(e != '{'){
-        return nullptr;
+    if(e == '{'){
+        return parseObject();
     }
-    return parseObject();
+    return nullptr;
 }
 
 // '[' has parsed already
@@ -335,14 +370,13 @@ ArrayValue *Parser::parseArray()
         v = getValue(token);
         if(v == nullptr)
             goto err_out;
-        arr->add(v);
+        arr->add(*v);
 
         //test if the next token is ','
         token = getToken();
         if(token != ',')
             break;
     }
-
     if(token == ']')
         return arr;
 err_out:
@@ -351,226 +385,3 @@ err_out:
     delete arr;
     return nullptr;
 }
-
-//
-////make sure buf[pos] is '"'
-//Value Parser::parseString()
-//{
-//
-//    int cur = pos+1;
-//    int start = pos + 1;
-//    StringVal val;
-//    bool b;
-//    pos++;
-//    int e = checkAndLoad();
-//    if(e<0)
-//        goto err_out;
-//
-//again:
-//    while(cur<cap && buf[cur]!='"'){
-//        cur++;
-//    }
-//    //
-//    b = val.add(buf+start, buf+cur-1);
-//    if(!b) // StringVal 分配内存失败，添加失败，可能是字符串太长
-//        goto err_out;
-//    if(cur<cap){
-//        //碰到'"', 字符传解析完成
-//        pos = cur+1;
-//        e = checkAndLoad();
-//        if(e<0)
-//            goto err_out;
-//        return val;
-//    }
-//    if(load()<=0)//IO err or end of file that need to be parsed as a string
-//        goto err_out;
-//    //accumulate string
-//    //reset start count offset
-//    start = cur = 0;
-//    goto again;
-//
-//err_out:
-//    return Value();
-//}
-//
-//Value *Parser::parseString()
-//{
-//    const char *s = &buf[++pos];
-//    while(buf[pos] != '"'){
-//        if(buf[pos] == '\\'){
-//            //do unscape
-//        }
-//        pos++;
-//    }
-//    return new StringVal(s, (size_t)(&buf[pos]-s));
-//}
-//
-////buf[pos] = '['
-//Value *Parser::parseArray()
-//{
-//    ArrayVal *val=new ArrayVal;
-//    Value *v = nullptr;
-//    bool isFirst = true;
-//    pos++;
-//    eatSpace();
-//
-//    while(1){
-//        if(!isFirst && buf[pos]!=','){
-//            //expect ','
-//            err = "expected ',';
-//            goto destroy;
-//        }
-//        isFirst = false;
-//        eatSpace();
-//        switch(buf[pos]){
-//            case ']': //end of an array
-//                pos++;
-//                return val;
-//            default:
-//                v = parseValue();
-//                break;
-//        }
-//        if(!v){
-//            err = "bad array val";
-//            goto destroy;
-//        }
-//        val.add(v);
-//        eatSpace();
-//        if(buf[pos] == ']'){
-//            pos++;
-//            return val;
-//        }
-//    }
-//    // shouldn't go to here
-//    err = "BUG : shouldn't go to here";
-//
-//destroy:
-//    //for i in Array :
-//    //  delete i
-//    //
-//    return null;
-//}
-//
-//Value* Parser::parseValue()
-//{
-//    char c = buf[pos];
-//    switch(c){
-//        case '"' :
-//            return parseString();// beginning with '"'
-//        case '[' :
-//            return parseArray(); // beginning with '['
-//        case '{' :
-//            return parseObject();
-//        case 't' :
-//            return parseTrue();
-//        case 'f' :
-//            return parseFalse();
-//        case 'n' :
-//            return parseNull();
-//        default:
-//            return parseNumber();
-//    }
-//}
-//Value *Parser::parseTrue()
-//{
-//    if(parseLiteral("true"))
-//        return new BoolVal(true);
-//    err = "bad true val ?";
-//    return nullptr;
-//}
-//Value *Parser::parseFalse()
-//{
-//    if(parseLiteral("false"))
-//        return new BoolVal(false);
-//    err = "bad false val ?";
-//    return nullptr;
-//}
-//Value *Parser::parseNull()
-//{
-//    if(parseLiteral("null"))
-//        return new Nullval;
-//    err = "bad null val ?";
-//    return  nullptr;
-//}
-//bool isDelimit(char x)
-//{
-//    bool b = false;
-//    switch(x){
-//        case ',':
-//        case '"':
-//        case ':':
-//        case '[':
-//        case ']':
-//        case '{':
-//        case '}':
-//            b = true;
-//        default:
-//            b = isBlackSpace(x);
-//    }
-//    return b;
-//}
-//
-//bool Parse::parseLiteral(const char *s)
-//{
-//    if(!strcmp(buf[pos], s))
-//        return false;
-//    pos += strlen(s);
-//    return true;
-//}
-//Value *Parse::ParseString()
-//{
-//    if(buf[pos]!='"'){
-//        err = "expected start string with `\"'";
-//        return nullptr;
-//    }
-//    return parseString();
-//}
-//// buf[pos] = '{' now
-//Value *Parser::parseObject()
-//{
-//    ObjectVal *obj = new ObjectVal;
-//    StringVal *key;
-//    Value *val;
-//    pos++;
-//    while(1){
-//        eatSpace();
-//        key = ParseString();
-//        if(!key)
-//            goto may_end;
-//        eatSpace();
-//        if(buf[pos] != ':')
-//            goto err_out;
-//        pos++;
-//        eatSpace();
-//        val = parseValue();
-//        if(!val)
-//            goto err_out;
-//        obj->add(key, val);
-//        eatSpace();
-//        if(buf[pos] == '}'){
-//            pos++;
-//            return obj;
-//        }
-//        if(buf[pos]!=',')
-//            goto err_out;
-//        pos++;
-//    }
-//may_end:
-//    if(buf[pos]=='}')
-//        return obj;
-//err_out:
-//    err = "bad key or val in parsing obj";
-//
-//    // for i in obj :
-//    //  delete key and val
-//    //
-//    return nullptr;
-//}
-//
-//struct mystring {
-//    char *str;
-//    size_t len;
-//};
-//namespace json {
-//    typedef std::string string;
-//    typedef std::

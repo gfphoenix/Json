@@ -1,4 +1,5 @@
-#include "json.h"
+#include "json.hpp"
+#include <cstdarg>
 #include <stdio.h>
 #include <string.h>
 
@@ -34,7 +35,7 @@ bool StringValue::Encode(const std::function<int (const void *, unsigned)>& writ
 {
     char buf[(unsigned)_v.size()+4];
     int n = sprintf(buf, "\"%s\"", _v.c_str());
-    return n==_v.size()+2 && writer(buf, n) == n;
+    return n==(int)_v.size()+2 && writer(buf, n) == n;
 }
 bool ArrayValue::Encode(const std::function<int (const void *, unsigned)>& writer)const 
 {
@@ -63,6 +64,7 @@ out:
 
 bool ObjectValue::Encode(const std::function<int (const void *, unsigned)>& writer)const
 {
+    bool first = true;
     int e;
     e = writer("{\n", 2);
     if(e != 2)
@@ -73,7 +75,12 @@ bool ObjectValue::Encode(const std::function<int (const void *, unsigned)>& writ
     for(auto x = _m.cbegin(); x != _m.cend(); x++){
         auto &k = x->first;
         auto &v = x->second;
-
+        if(!first){
+            e = writer(",\n", 2);
+            if(e != 2)
+                return false;
+        }
+        first = false;
         char buf[(unsigned)k.size() + 8];
         int n = snprintf(buf, (unsigned)k.size()+8, "\"%s\" : ", k.c_str());
         e = writer(buf, n);
@@ -82,17 +89,61 @@ bool ObjectValue::Encode(const std::function<int (const void *, unsigned)>& writ
         auto ok = v->Encode(writer);
         if(!ok)
             return false;
-        e = writer(",\n", 2);
-        if(e != 2)
-            return false;
     }
 out:
-    e = writer("}", 1);
-    if(e != 1)
+    e = writer("\n}", 2);
+    if(e != 2)
         return false;
     return true;
 }
 
+    ArrayValue::ArrayValue(Value *first, ...)
+:Value(Type::jType_ARRAY)
+{
+    Value *x;
+    va_list ap;
+    for(x=first, va_start(ap, first); x!=nullptr; x = va_arg(ap, Value*)){
+        _v.push_back(x);
+    }
+    va_end(ap);
+}
+ArrayValue::~ArrayValue()
+{
+    for(auto x : _v)
+        delete x;
+}
+ObjectValue::~ObjectValue()
+{
+    for(auto x : _m)
+        delete x.second;
+}
 // ==============================================================================================
-// ############## end of encode
+// add, del
+void ArrayValue::add(Value &v)
+{
+    _v.push_back(&v);
+}
+Value *ArrayValue::del(size_t idx)
+{
+    if(idx>= _v.size())
+        return nullptr;
+    auto tmp = _v.begin()+idx;
+    _v.erase(tmp);
+    return *tmp;
+}
+
+void ObjectValue::add(const std::string &key, Value &val)
+{
+    auto v = _m[key];
+    _m[key] = &val;
+    delete v;
+}
+Value *ObjectValue::del(const std::string &key)
+{
+    auto u = _m.find(key);
+    if(u!=_m.end()){
+        _m.erase(u);
+    }
+    return u->second;
+}
 

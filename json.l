@@ -1,5 +1,5 @@
 %{
-#include "json.h"
+#include "json.hpp"
 #include "json.tab.hxx"
 #include <map>
 #include <string>
